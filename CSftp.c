@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
             return 1;
         }
          
-      //  pthread_join( sniffer_thread , NULL);
+        pthread_join( sniffer_thread , NULL);
 		
         puts("Closing connection.");
     }
@@ -82,8 +82,8 @@ void *connection_handler(void *server_sock) {
 
     int sock = *(int*)server_sock;
     int read_size;
-    char *message , client_message[2000], command[5], user[5];
-	int logged_in = 0;
+    char *message , client_message[2000], command[4], parameter[100];
+	int logged_in = 0, binary_mode = 1;
      
     message = "<-- Welcome to CPSC 317 Assignment 3 FTP server by Alan Tsin.\n";
     write(sock , message , strlen(message));
@@ -95,12 +95,12 @@ void *connection_handler(void *server_sock) {
 		
 		sscanf(client_message, "%s", command);
 		
-		if (!strcasecmp(command, "user")) {
+		if (!strcasecmp(command, "USER")) {
 			// If not already logged in
 			if (logged_in == 0) {
 				// Compare provided username with "cs317"
-				sscanf(client_message, "%s%s", user, user);
-				if (!strcasecmp(user, "cs317")) {
+				sscanf(client_message, "%s%s", parameter, parameter);
+				if (!strcasecmp(parameter, "cs317")) {
 					logged_in = 1;
 					message = "<-- 230 Login successful.\n";
 					write(sock , message , strlen(message));
@@ -119,8 +119,56 @@ void *connection_handler(void *server_sock) {
 			
 		}
 		
+		else if (!strcmp(command, "TYPE")) {
+			
+			if (logged_in == 1) {
+				
+				sscanf(client_message, "%s%s", parameter, parameter);
+				
+				if (!strcasecmp(parameter, "A")) {
+					
+					if (binary_mode == 1) {
+						binary_mode = 0;
+						message = "<-- 200 Entering ASCII mode.\n";
+						write(sock , message , strlen(message));
+					}
+					
+					else {
+						message = "<-- 530 Already in ASCII mode.\n";
+						write(sock , message , strlen(message));
+					}
+					
+				}
+				// Does not support any other username
+				else if (!strcasecmp(parameter, "I")) {
+					
+						if (binary_mode == 0) {
+						binary_mode = 1;
+						message = "<-- 200 Entering Binary mode.\n";
+						write(sock , message , strlen(message));
+					}
+					
+					else {
+						message = "<-- 530 Already in Binary mode.\n";
+						write(sock , message , strlen(message));
+					}
+					
+				}
+				
+				else {
+					message = "<-- 530 This server only supports TYPE A and TYPE I.\n";
+					write(sock , message , strlen(message));
+				}
+			}
+			
+			else {
+				message = "<-- 530 Must login first.\n";
+				write(sock , message , strlen(message));
+			}
+			
+		}
 		
-		else if (!strcmp(command, "quit")) {
+		else if (!strcmp(command, "QUIT")) {
 			message = "User has quit\n";
 			write(sock , message , strlen(message));
 			fflush(stdout);
@@ -128,6 +176,7 @@ void *connection_handler(void *server_sock) {
 		}
 		
 		else {
+			puts("Waiting for client.");
 		}
 
     }
