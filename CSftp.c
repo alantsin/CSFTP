@@ -9,7 +9,7 @@
 #include "dir.h"
 #include "usage.h"
 
-#define PORT 8888
+#define PORT 5555
 
 #define BACKLOG 10
 
@@ -90,6 +90,11 @@ void *connection_handler(void *server_sock) {
 	struct sockaddr_in svr_addr;
 	int svr_addr_len = sizeof(svr_addr);
 	getsockname(sock, (struct sockaddr*)&svr_addr, &svr_addr_len);
+
+	int data_client = -1;
+    struct sockaddr_in data_client_addr;
+	int data_client_len = sizeof(data_client_addr);
+	char cwd[1024];
 	
     char *message , client_message[2000], command[4], parameter[100];
 	int logged_in = 0, ascii_type = 0, stream_mode = 0, fs_type = 0, passive_mode = 0;
@@ -241,6 +246,7 @@ void *connection_handler(void *server_sock) {
 				do {
 					// Pick a random port number
 					pasv_port = (rand() % 64512 + 1024);
+					send_str(sock, "<- Port number: %d\n", pasv_port);
 					// Create new socket
 					pasv_sock = socket(AF_INET , SOCK_STREAM , 0);
 				
@@ -251,15 +257,16 @@ void *connection_handler(void *server_sock) {
 				} while ( bind(pasv_sock,(struct sockaddr *)&pasv_server , sizeof(pasv_server)) < 0 );
 
 				if (pasv_sock < 0) {
-					send_str(sock, "<- 500 Error entering Passive mode.\n");
+					send_str(sock, "<-- 500 Error entering Passive mode.\n");
 				}
 			
 				else {
+					listen(pasv_sock , 1);
 					passive_mode = 1;
 					
 					uint32_t t = svr_addr.sin_addr.s_addr;
 					
-					send_str(sock, "<-- 227 Entering passive mode (%d,%d,%d,%d,%d,%d)\n", 
+					send_str(sock, "<-- 227 Entering passive mode (%d,%d,%d,%d,%d,%d)", 
 									t&0xff, 
 									(t>>8)&0xff, 
 									(t>>16)&0xff, 
@@ -270,9 +277,42 @@ void *connection_handler(void *server_sock) {
 				}
 			}
 			
+			else {
+				send_str(sock, "<- 227 Already in passive mode. Port number: %d\n", pasv_port);
+			}
+			
+		}
+		
+		else if (!strcasecmp(command, "NLST")) {
+			
+			if (logged_in == 1) {
+			
+				if (passive_mode == 1) {
+						
+					if (pasv_port > 1024 && pasv_port <= 65535 && pasv_sock >= 0) {
+						ascii_type = 1;
+						send_str(sock, "<-- 150 Opening ASCII mode data connection for file list.\n");
+						
+						listen(pasv_sock, BACKLOG);
+						data_client = accept(pasv_sock, (struct sockaddr *)&data_client_addr, &data_client_len);
+						getcwd(cwd, sizeof(cwd));
+						send_str(sock, "<-- In directory: %s\n", cwd);
+						listFiles(data_client, cwd);
+						send_str(sock, "<-- 226 Transfer complete.\n");
+					}
+						
+					else {
+						send_str(sock, "<- 500 No passive server created.\n");
+					}
+				}
+				
+				else {
+					send_str(sock, "<- 425 Use PASV first.\n");
+				}
+			}
 			
 			else {
-				send_str(sock, "<- 227 Already in passive mode.\n");
+				send_str(sock, "<-- 530 Must login first.\n");
 			}
 			
 		}
@@ -280,6 +320,8 @@ void *connection_handler(void *server_sock) {
 		else if (!strcasecmp(command, "QUIT")) {
 			send_str(sock, "<-- 221 User has quit. Terminating connection.\n");
 			fflush(stdout);
+			close(sock);
+			close(pasv_sock);
 			break;
 		}
 		
@@ -292,9 +334,6 @@ void *connection_handler(void *server_sock) {
 	if(read_size == -1) {
         perror("recv failed");
     }
-         
-    //Free the socket pointer
-    free(server_sock);
      
     return 0;
 }
