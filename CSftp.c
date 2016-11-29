@@ -83,7 +83,7 @@ void *connection_handler(void *server_sock) {
     int sock = *(int*)server_sock;
     int read_size;
     char *message , client_message[2000], command[4], parameter[100];
-	int logged_in = 0, binary_mode = 1;
+	int logged_in = 0, ascii_type = 0, stream_mode = 0, fs_type = 0;
      
     message = "<-- Welcome to CPSC 317 Assignment 3 FTP server by Alan Tsin.\n";
     write(sock , message , strlen(message));
@@ -119,7 +119,7 @@ void *connection_handler(void *server_sock) {
 			
 		}
 		
-		else if (!strcmp(command, "TYPE")) {
+		else if (!strcasecmp(command, "TYPE")) {
 			
 			if (logged_in == 1) {
 				
@@ -127,14 +127,14 @@ void *connection_handler(void *server_sock) {
 				
 				if (!strcasecmp(parameter, "A")) {
 					
-					if (binary_mode == 1) {
-						binary_mode = 0;
-						message = "<-- 200 Entering ASCII mode.\n";
+					if (ascii_type == 0) {
+						ascii_type = 1;
+						message = "<-- 200 Setting TYPE to ASCII.\n";
 						write(sock , message , strlen(message));
 					}
 					
 					else {
-						message = "<-- 530 Already in ASCII mode.\n";
+						message = "<-- 530 TYPE is already ASCII.\n";
 						write(sock , message , strlen(message));
 					}
 					
@@ -142,14 +142,14 @@ void *connection_handler(void *server_sock) {
 				// Does not support any other username
 				else if (!strcasecmp(parameter, "I")) {
 					
-						if (binary_mode == 0) {
-						binary_mode = 1;
-						message = "<-- 200 Entering Binary mode.\n";
+						if (ascii_type == 1) {
+						ascii_type = 0;
+						message = "<-- 200 Setting TYPE to Image.\n";
 						write(sock , message , strlen(message));
 					}
 					
 					else {
-						message = "<-- 530 Already in Binary mode.\n";
+						message = "<-- 530 TYPE is already Image.\n";
 						write(sock , message , strlen(message));
 					}
 					
@@ -161,6 +161,7 @@ void *connection_handler(void *server_sock) {
 				}
 			}
 			
+			
 			else {
 				message = "<-- 530 Must login first.\n";
 				write(sock , message , strlen(message));
@@ -168,7 +169,77 @@ void *connection_handler(void *server_sock) {
 			
 		}
 		
-		else if (!strcmp(command, "QUIT")) {
+		else if (!strcasecmp(command, "MODE")) {
+			
+			if (logged_in == 1) {
+				
+				sscanf(client_message, "%s%s", parameter, parameter);
+				
+				if (!strcasecmp(parameter, "S")) {
+					
+					if (stream_mode == 0) {
+						stream_mode = 1;
+						message = "<-- 200 Entering Stream mode.\n";
+						write(sock , message , strlen(message));
+					}
+					
+					else {
+						message = "<-- 530 Already in Stream mode.\n";
+						write(sock , message , strlen(message));
+					}
+					
+				}
+
+				else {
+					message = "<-- 530 This server only supports MODE S.\n";
+					write(sock , message , strlen(message));
+				}
+			}
+			
+			
+			else {
+				message = "<-- 530 Must login first.\n";
+				write(sock , message , strlen(message));
+			}
+			
+		}
+		
+		else if (!strcasecmp(command, "STRU")) {
+			
+			if (logged_in == 1) {
+				
+				sscanf(client_message, "%s%s", parameter, parameter);
+				
+				if (!strcasecmp(parameter, "F")) {
+					
+					if (fs_type == 0) {
+						fs_type = 1;
+						message = "<-- 200 Data Structure set to File Structure.\n";
+						write(sock , message , strlen(message));
+					}
+					
+					else {
+						message = "<-- 530 Data Structure is already set to File Structure.\n";
+						write(sock , message , strlen(message));
+					}
+					
+				}
+
+				else {
+					message = "<-- 530 This server only supports STRU F.\n";
+					write(sock , message , strlen(message));
+				}
+			}
+			
+			
+			else {
+				message = "<-- 530 Must login first.\n";
+				write(sock , message , strlen(message));
+			}
+			
+		}
+		
+		else if (!strcasecmp(command, "QUIT")) {
 			message = "User has quit\n";
 			write(sock , message , strlen(message));
 			fflush(stdout);
@@ -176,7 +247,8 @@ void *connection_handler(void *server_sock) {
 		}
 		
 		else {
-			puts("Waiting for client.");
+			message = "<- 530 Unrecognized command. This server only supports: USER, QUIT, TYPE, MODE, STRU, RETR, PASV, NLST.\n";
+			write(sock , message , strlen(message));
 		}
 
     }
