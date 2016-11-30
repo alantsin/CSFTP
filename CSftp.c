@@ -9,9 +9,9 @@
 #include "dir.h"
 #include "usage.h"
 
-#define PORT 5555
-
 #define BACKLOG 10
+
+int port_number;
 
 // Thread function prototype
 void *connection_handler(void *);
@@ -19,7 +19,18 @@ void *connection_handler(void *);
 // Function for sending formatted strings prototype
 int send_str(int, const char*, ...);
 
+// Functions for RETR
+int send_path(int peer, char *file, uint32_t offset);
+int send_file(int peer, FILE *f);
+
 int main(int argc, char **argv) {
+	
+	if (argc != 2) {
+		puts("Require only port number in argument. ./CSftp PORTNUMBER");
+		return 0;
+	}
+	
+	port_number = atoi(argv[1]);
 
     int server_sock , client_sock , c , *new_sock;
 	
@@ -38,7 +49,7 @@ int main(int argc, char **argv) {
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons( PORT );
+    server.sin_port = htons( port_number );
      
     //Bind
     if( bind(server_sock,(struct sockaddr *)&server , sizeof(server)) < 0) {
@@ -96,15 +107,15 @@ void *connection_handler(void *server_sock) {
 	int data_client_len = sizeof(data_client_addr);
 	char cwd[1024];
 	
-    char *message , client_message[2000], command[4], parameter[100];
+    char *message , client_message[2000], command[4], parameter[1000];
 	int logged_in = 0, ascii_type = 0, stream_mode = 0, fs_type = 0, passive_mode = 0;
 	int pasv_port, pasv_sock;
 	struct sockaddr_in pasv_server;
      
-    message = "<-- Welcome to CPSC 317 Assignment 3 FTP server by Alan Tsin.\n";
+    message = "220 - Welcome to CPSC 317 Assignment 3 FTP server by Alan Tsin.\n";
     write(sock , message , strlen(message));
      
-    message = "<-- 220 To begin, specify your username. This server only supports the username: cs317\n";
+    message = "220 - To begin, specify your username. This server only supports the username: cs317\n";
     write(sock , message , strlen(message));
      
     while( (read_size = recv(sock , client_message , 2000 , 0)) > 0 ) {
@@ -118,16 +129,16 @@ void *connection_handler(void *server_sock) {
 				sscanf(client_message, "%s%s", parameter, parameter);
 				if (!strcasecmp(parameter, "cs317")) {
 					logged_in = 1;
-					send_str(sock, "<-- 230 Login successful.\n");
+					send_str(sock, "230 Login successful.\n");
 				}
 				// Does not support any other username
 				else {
-					send_str(sock, "<-- 430 This server only supports the username: cs317\n");
+					send_str(sock, "430 This server only supports the username: cs317\n");
 				}
 			}
 			// If already logged in
 			else {
-				send_str(sock, "<-- 430 Can't change from cs317 user.\n");
+				send_str(sock, "430 Can't change from cs317 user.\n");
 			}
 			
 		}
@@ -142,11 +153,11 @@ void *connection_handler(void *server_sock) {
 					
 					if (ascii_type == 0) {
 						ascii_type = 1;
-						send_str(sock, "<-- 200 Setting TYPE to ASCII.\n"); 
+						send_str(sock, "200 Setting TYPE to ASCII.\n"); 
 					}
 					
 					else {
-						send_str(sock, "<-- 200 TYPE is already ASCII.\n");
+						send_str(sock, "200 TYPE is already ASCII.\n");
 					}
 					
 				}
@@ -155,23 +166,23 @@ void *connection_handler(void *server_sock) {
 					
 						if (ascii_type == 1) {
 						ascii_type = 0;
-						send_str(sock, "<-- 200 Setting TYPE to Image.\n");
+						send_str(sock, "200 Setting TYPE to Image.\n");
 					}
 					
 					else {
-						send_str(sock, "<-- 200 TYPE is already Image.\n"); 
+						send_str(sock, "200 TYPE is already Image.\n"); 
 					}
 					
 				}
 				
 				else {
-					send_str(sock, "<-- 504 This server only supports TYPE A and TYPE I.\n");
+					send_str(sock, "504 This server only supports TYPE A and TYPE I.\n");
 				}
 			}
 			
 			
 			else {
-				send_str(sock, "<-- 530 Must login first.\n");
+				send_str(sock, "530 - Must login first.\n");
 			}
 			
 		}
@@ -186,23 +197,23 @@ void *connection_handler(void *server_sock) {
 					
 					if (stream_mode == 0) {
 						stream_mode = 1;
-						send_str(sock, "<-- 200 Entering Stream mode.\n"); 
+						send_str(sock, "200 Entering Stream mode.\n"); 
 					}
 					
 					else {
-						send_str(sock, "<-- 200 Already in Stream mode.\n");
+						send_str(sock, "200 Already in Stream mode.\n");
 					}
 					
 				}
 
 				else {
-					send_str(sock, "<-- 504 This server only supports MODE S.\n");
+					send_str(sock, "504 This server only supports MODE S.\n");
 				}
 			}
 			
 			
 			else {
-				send_str(sock, "<-- 530 Must login first.\n");
+				send_str(sock, "530 Must login first.\n");
 			}
 			
 		}
@@ -217,23 +228,23 @@ void *connection_handler(void *server_sock) {
 					
 					if (fs_type == 0) {
 						fs_type = 1;
-						send_str(sock, "<-- 200 Data Structure set to File Structure.\n");
+						send_str(sock, "200 Data Structure set to File Structure.\n");
 					}
 					
 					else {
-						send_str(sock, "<-- 200 Data Structure is already set to File Structure.\n");
+						send_str(sock, "200 Data Structure is already set to File Structure.\n");
 					}
 					
 				}
 
 				else {
-					send_str(sock, "<-- 504 This server only supports STRU F.\n");
+					send_str(sock, "504 This server only supports STRU F.\n");
 				}
 			}
 			
 			
 			else {
-				send_str(sock, "<-- 530 Must login first.\n");
+				send_str(sock, "530 Must login first.\n");
 			}
 			
 		}
@@ -257,7 +268,7 @@ void *connection_handler(void *server_sock) {
 				} while ( bind(pasv_sock,(struct sockaddr *)&pasv_server , sizeof(pasv_server)) < 0 );
 
 				if (pasv_sock < 0) {
-					send_str(sock, "<-- 500 Error entering Passive mode.\n");
+					send_str(sock, "500 Error entering Passive mode.\n");
 				}
 			
 				else {
@@ -266,7 +277,7 @@ void *connection_handler(void *server_sock) {
 					
 					uint32_t t = svr_addr.sin_addr.s_addr;
 					
-					send_str(sock, "<-- 227 Entering passive mode (%d,%d,%d,%d,%d,%d)", 
+					send_str(sock, "227 Entering passive mode (%d,%d,%d,%d,%d,%d)\n", 
 									t&0xff, 
 									(t>>8)&0xff, 
 									(t>>16)&0xff, 
@@ -278,7 +289,7 @@ void *connection_handler(void *server_sock) {
 			}
 			
 			else {
-				send_str(sock, "<- 227 Already in passive mode. Port number: %d\n", pasv_port);
+				send_str(sock, "227 Already in passive mode. Port number: %d\n", pasv_port);
 			}
 			
 		}
@@ -291,34 +302,88 @@ void *connection_handler(void *server_sock) {
 						
 					if (pasv_port > 1024 && pasv_port <= 65535 && pasv_sock >= 0) {
 						ascii_type = 1;
-						send_str(sock, "<-- 150 Opening ASCII mode data connection for file list.\n");
+						send_str(sock, "150 Here comes the directory listing.\n");
 						
 						listen(pasv_sock, BACKLOG);
 						data_client = accept(pasv_sock, (struct sockaddr *)&data_client_addr, &data_client_len);
+						
 						getcwd(cwd, sizeof(cwd));
-						send_str(sock, "<-- In directory: %s\n", cwd);
 						listFiles(data_client, cwd);
-						send_str(sock, "<-- 226 Transfer complete.\n");
+						send_str(sock, "226 Transfer complete.\n");
+						
+						close(data_client);
+						data_client = -1;
+						
+						close(pasv_sock);
+						passive_mode = 0;
 					}
 						
 					else {
-						send_str(sock, "<- 500 No passive server created.\n");
+						send_str(sock, "500 No passive server created.\n");
 					}
 				}
 				
 				else {
-					send_str(sock, "<- 425 Use PASV first.\n");
+					send_str(sock, "425 Use PASV first.\n");
 				}
 			}
 			
 			else {
-				send_str(sock, "<-- 530 Must login first.\n");
+				send_str(sock, "530 Must login first.\n");
+			}
+			
+		}
+		
+		else if (!strcasecmp(command, "RETR")) {
+			
+			if (logged_in == 1) {
+			
+				if (passive_mode == 1) {
+						
+					if (pasv_port > 1024 && pasv_port <= 65535 && pasv_sock >= 0) {
+						ascii_type = 0;
+						send_str(sock, "150 Opening binary mode data connection.\n");
+						listen(pasv_sock, BACKLOG);
+						data_client = accept(pasv_sock, (struct sockaddr *)&data_client_addr, &data_client_len);
+						
+						sscanf(client_message, "%s%s", parameter, parameter);
+						
+						int st = send_path(data_client, parameter, 0);
+						
+						if (st >= 0) {
+							send_str(sock, "226 Transfer complete.\n");
+						}
+						
+						else {
+							send_str(sock, "451 File not found.\n");
+						}
+						
+							close(data_client);
+							data_client = -1;
+						
+							close(pasv_sock);
+							passive_mode = 0;
+						
+					}
+						
+					else {
+						send_str(sock, "500 No passive server created.\n");
+					}
+				}
+				
+				else {
+					send_str(sock, "425 Use PASV first.\n");
+				}
+			}
+			
+			else {
+				send_str(sock, "530 Must login first.\n");
 			}
 			
 		}
 		
 		else if (!strcasecmp(command, "QUIT")) {
-			send_str(sock, "<-- 221 User has quit. Terminating connection.\n");
+			send_str(sock, "221 User has quit. Terminating connection.\n");
 			fflush(stdout);
 			close(sock);
 			close(pasv_sock);
@@ -326,7 +391,7 @@ void *connection_handler(void *server_sock) {
 		}
 		
 		else {
-			send_str(sock, "<- 530 Unrecognized command. This server only supports: USER, QUIT, TYPE, MODE, STRU, RETR, PASV, NLST.\n");
+			send_str(sock, "530 Unrecognized command. This server only supports: USER, QUIT, TYPE, MODE, STRU, RETR, PASV, NLST.\n");
 		}
 
     }
@@ -345,4 +410,37 @@ int send_str(int peer, const char* fmt, ...) {
     vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
     va_end(args);
     return write(peer , msgbuf , strlen(msgbuf));
+}
+
+int send_path(int peer, char *file, uint32_t offset) {
+    FILE *f = fopen(file, "rb");
+    if (f) {
+        fseek(f, offset, SEEK_SET);
+        int st = send_file(peer, f);
+        if (st < 0) {
+            return -2;
+        }
+    } else {
+        return -1;
+    }
+    int ret = fclose(f);
+    return ret == 0 ? 0 : -3;
+}
+
+int send_file(int peer, FILE *f) {
+    char filebuf[1025];
+    int n, ret = 0;
+    while ((n = fread(filebuf, 1, 1024, f)) > 0) {
+        int st = send(peer, filebuf, n, 0);
+		
+        if (st < 0) {
+            ret = -1;
+            break;
+        } 
+		
+		else {
+            filebuf[n] = 0;
+        }
+    }
+    return ret;
 }
