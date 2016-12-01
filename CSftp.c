@@ -257,7 +257,6 @@ void *connection_handler(void *server_sock) {
 				do {
 					// Pick a random port number
 					pasv_port = (rand() % 64512 + 1024);
-					send_str(sock, "<- Port number: %d\n", pasv_port);
 					// Create new socket
 					pasv_sock = socket(AF_INET , SOCK_STREAM , 0);
 				
